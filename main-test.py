@@ -2,60 +2,41 @@ import cv2
 import numpy as np
 import mss
 from ultralytics import YOLO
+import pytesseract
+from PIL import Image
+import time
 
-# โหลดโมเดล YOLOv8 ที่ผ่านการฝึกมาแล้ว (ใช้โมเดลที่พร้อมใช้งาน)
-model = YOLO("yolov8n.pt")  # ใช้โมเดลเวอร์ชันเล็ก (nano) เพื่อลดการใช้ทรัพยากร
-
-# กำหนดขนาดของพื้นที่จับภาพ
+model = YOLO("yolov8n.pt")
 monitor = {"top": 100, "left": 100, "width": 800, "height": 600}
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-# เริ่มจับภาพหน้าจอแบบเรียลไทม์
 with mss.mss() as sct:
     while True:
-        # จับภาพหน้าจอ
         screenshot = sct.grab(monitor)
         img = np.array(screenshot)
-
-        # แปลงจาก BGRA เป็น BGR
         img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-
-        # ตรวจจับวัตถุด้วย YOLO
         results = model(img)
+        image = Image.fromarray(img)
+        text = pytesseract.image_to_string(image, lang='tha')
+        print(text)
+        h, w, _ = img.shape
+        boxes = pytesseract.image_to_boxes(image, lang='tha')
 
-        # แสดงผลการตรวจจับ
+        for b in boxes.splitlines():
+            b = b.split()
+            x, y, x2, y2 = int(b[1]), int(b[2]), int(b[3]), int(b[4])
+            cv2.rectangle(img, (x, h - y), (x2, h - y2), (0, 255, 0), 2)
+        
         for r in results:
             for box in r.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])  # พิกัดของ bounding box
-                conf = box.conf[0]  # ความมั่นใจของการตรวจจับ
-                label = r.names[int(box.cls[0])]  # ประเภทของวัตถุที่ตรวจจับได้
-
-                # วาดกรอบสี่เหลี่ยมรอบวัตถุ
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                conf = box.conf[0]
+                label = r.names[int(box.cls[0])]
                 cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(img, f"{label} {conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        # แสดงภาพที่มีการตรวจจับ
         cv2.imshow("YOLOv8 Screen Detection", img)
 
-        # กด 'q' เพื่อออกจากโปรแกรม
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-def recognize_face():
-    image = face_recognition.load_image_file(image_path)
-
-    unknown_face_encodings = face_recognition.face_encodings(image)
-
-    if unknown_face_encodings:
-        for unknown_face_encoding in unknown_face_encodings:
-            matches = face_recognition.compare_faces(known_face_encodings, unknown_face_encodings)
-
-            name = "Unknown"
-            if True in matches:
-                first_match_index = matches.index(True)
-                name = known_face_names[first_match_index]
-
-                print(f"{name}")
-            print(f"No Faces detected in the image.")
-
-# ปิดหน้าต่างทั้งหมด
 cv2.destroyAllWindows()
